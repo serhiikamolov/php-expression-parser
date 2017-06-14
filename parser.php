@@ -67,15 +67,20 @@ class Parser
     private function stripBrackets($expr):string
     {
 
-           if ($expr[0] == self::BRACKET_OPEN) {
-                $i = 1;
-                while ($expr[$i] != self::BRACKET_CLOSE) {
-                    $i ++;
-                }
-                if ((strlen($expr)-1) == $i) {
-                    $expr= substr(substr($expr,0,-1), 1);
-                }
-           }
+       if (isset($expr[0]) && $expr[0] == self::BRACKET_OPEN) {
+
+            $i = 1;
+            $brackets = 1;
+            while ($i<strlen($expr)-1 && $brackets != 0) {
+                if ($expr[$i] == self::BRACKET_OPEN) $brackets++;
+                if ($expr[$i] == self::BRACKET_CLOSE) $brackets--;
+                $i ++;
+            }
+
+            if ((strlen($expr)-1) == $i) {
+                $expr= substr(substr($expr,0,-1), 1);
+            }
+       }
 
         if (empty($expr)) {
                throw new ExpressionException();
