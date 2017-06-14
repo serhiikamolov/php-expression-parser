@@ -24,8 +24,8 @@ class Parser
     const BRACKET_OPEN = '(';
     const BRACKET_CLOSE = ')';
 
-    const TERMS_RULE = '/^[\+\-]+$/';
-    const FACTORS_RULE = '/^[\*\/]+$/';
+    const TERMS_RULE = '/[\+\-]/';
+    const FACTORS_RULE = '/[\*\/]/';
 
     public $expression = null;
 
@@ -66,21 +66,20 @@ class Parser
      */
     private function stripBrackets($expr):string
     {
-
        if (isset($expr[0]) && $expr[0] == self::BRACKET_OPEN) {
-
             $i = 1;
             $brackets = 1;
-            while ($i<strlen($expr)-1 && $brackets != 0) {
+            for ($i=1; $i<strlen($expr); $i++) {
                 if ($expr[$i] == self::BRACKET_OPEN) $brackets++;
                 if ($expr[$i] == self::BRACKET_CLOSE) $brackets--;
-                $i ++;
+                if ($brackets == 0) break;
             }
 
-            if ((strlen($expr)-1) == $i) {
+            if ((strlen($expr))-1 == $i) {
                 $expr= substr(substr($expr,0,-1), 1);
             }
        }
+
 
         if (empty($expr)) {
                throw new ExpressionException();
@@ -164,6 +163,7 @@ class Parser
      */
     private function evalute($operand1, $operand2, string $operator):float
     {
+        echo $operand1." ".$operator." ".$operand2."\n";
         switch ($operator) {
             case(static::OPERATOR_PLUS):
                 return $operand1+$operand2;
@@ -204,8 +204,15 @@ class Parser
 
         if (!empty($terms['operands'])) {
             foreach ($terms['operands'] as $key=>$term) {
-                $factors = $this->parseOperands(static::FACTORS_RULE, $term);
-                $terms['operands'][$key] = $this->processFactors($factors);
+                //print_r($term." ".preg_match(static::TERMS_RULE, $terms['operands'][$key])."\n");
+                //var_dump(sizeof($this->parseOperands(static::TERMS_RULE, $term)['operands']));
+                if (preg_match(static::TERMS_RULE, $term)
+                    && sizeof($this->parseOperands(static::TERMS_RULE, $term)['operands']) > 1) {
+                    $terms['operands'][$key] = $this->processExpr($term);
+                }else {
+                    $factors = $this->parseOperands(static::FACTORS_RULE, $term);
+                    $terms['operands'][$key] = $this->processFactors($factors);
+                }
             }
         }
 
