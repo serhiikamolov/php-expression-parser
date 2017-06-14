@@ -202,8 +202,6 @@ class Parser
 
         if (!empty($terms['operands'])) {
             foreach ($terms['operands'] as $key=>$term) {
-                //print_r($term." ".preg_match(static::TERMS_RULE, $terms['operands'][$key])."\n");
-                //var_dump(sizeof($this->parseOperands(static::TERMS_RULE, $term)['operands']));
                 if (preg_match(static::TERMS_RULE, $term)
                     && sizeof($this->parseOperands(static::TERMS_RULE, $term)['operands']) > 1) {
                     $terms['operands'][$key] = $this->processExpr($term);
