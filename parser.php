@@ -67,7 +67,6 @@ class Parser
     private function stripBrackets($expr):string
     {
        if (isset($expr[0]) && $expr[0] == self::BRACKET_OPEN) {
-            $i = 1;
             $brackets = 1;
             for ($i=1; $i<strlen($expr); $i++) {
                 if ($expr[$i] == self::BRACKET_OPEN) $brackets++;
@@ -179,6 +178,26 @@ class Parser
         return null;
     }
 
+    /**
+     * Evalute by pairs from operands list
+     *
+     * @param $list
+     * @return float|int
+     */
+    private function evaluteOperands($list)
+    {
+        $result = 0;
+        if ($list) {
+            $result = $list['operands'][0];
+            for ($i = 1; $i < sizeof($list['operands']); $i++) {
+                if (!empty($list['operators'][$i - 1])) {
+                    $result = $this->evalute($result, $list['operands'][$i], $list['operators'][$i - 1]);
+                }
+            }
+        }
+        return $result;
+    }
+
 
     /**
      * Parse an expression
@@ -198,8 +217,6 @@ class Parser
      */
     private function processTerms($terms):float
     {
-        $result = 0;
-
         if (!empty($terms['operands'])) {
             foreach ($terms['operands'] as $key=>$term) {
                 if (preg_match(static::TERMS_RULE, $term)
@@ -212,16 +229,7 @@ class Parser
             }
         }
 
-        if ($terms) {
-            $result = $terms['operands'][0];
-            for ($i=1; $i< sizeof($terms['operands']); $i++) {
-                if (!empty($terms['operators'][$i-1])) {
-                    $result = $this->evalute($result, $terms['operands'][$i], $terms['operators'][$i-1]);
-                }
-            }
-        }
-
-        return $result;
+        return $this->evaluteOperands($terms);
     }
 
     /**
@@ -230,8 +238,6 @@ class Parser
      * @return float
      */
     private function processFactors($factors):float {
-        $result = 0;
-
         if (!empty($factors['operands'])) {
             foreach ($factors['operands'] as $key=>$factor) {
                 $factors['operands'][$key] = $this->processNeg($factor);
@@ -241,16 +247,7 @@ class Parser
             return $factors['operands'][0];
         }
 
-        if ($factors) {
-            $result = $factors['operands'][0];
-            for ($i=1; $i< sizeof($factors['operands']); $i++) {
-                if (!empty($factors['operators'][$i-1])) {
-                    $result = $this->evalute($result, $factors['operands'][$i], $factors['operators'][$i-1]);
-                }
-            }
-        }
-
-        return $result;
+        return $this->evaluteOperands($factors);
     }
 
     /**
