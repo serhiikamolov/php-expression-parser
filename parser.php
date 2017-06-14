@@ -80,7 +80,6 @@ class Parser
             }
        }
 
-
         if (empty($expr)) {
                throw new ExpressionException();
         }
@@ -163,7 +162,6 @@ class Parser
      */
     private function evalute($operand1, $operand2, string $operator):float
     {
-        echo $operand1." ".$operator." ".$operand2."\n";
         switch ($operator) {
             case(static::OPERATOR_PLUS):
                 return $operand1+$operand2;
