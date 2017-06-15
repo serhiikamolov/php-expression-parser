@@ -1,0 +1,13 @@
+{
+    "name": "skamolov/php-expression-parser",
+    "description": "Simple expression parser",
+    "require-dev": {
+        "phpunit/phpunit": "^6.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "classes\\": "classes"
+        }
+    },
+    "license": "MIT"
+}
