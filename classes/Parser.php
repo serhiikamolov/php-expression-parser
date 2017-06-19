@@ -27,8 +27,8 @@ class Parser
     const BRACKET_OPEN = '(';
     const BRACKET_CLOSE = ')';
 
-    const TERMS_RULE = '/[\+\-]/';
-    const FACTORS_RULE = '/[\*\/]/';
+    const ADD_RULE = '/[\+\-]/';
+    const MULT_RULE = '/[\*\/]/';
 
     public function __construct()
     {}
@@ -36,6 +36,17 @@ class Parser
     public function isNumber($string):bool
     {
         return preg_match('/^-?((\d+(\.\d*)?)|(\.\d+))$/', $string);
+    }
+
+
+    public function isAdd($string):bool
+    {
+        return strlen($string) == 1 && preg_match(self::ADD_RULE, $string);
+    }
+
+    public function isMult($string):bool
+    {
+        return strlen($string) == 1 && preg_match(self::MULT_RULE, $string);
     }
 
     /**
@@ -52,110 +63,104 @@ class Parser
         ) ? true : false;
     }
 
-    /**
-     * Strip brackets from beginning and from end of expression
-     * @param $expr
-     * @return string
-     * @throws Exception
-     */
-    public function stripBrackets($expr):string
+
+    private function arrayPush (&$array, $mixes)
     {
-       if (isset($expr[0]) && $expr[0] == self::BRACKET_OPEN) {
-            $brackets = 1;
-            for ($i=1; $i<strlen($expr); $i++) {
-                if ($expr[$i] == self::BRACKET_OPEN) $brackets++;
-                if ($expr[$i] == self::BRACKET_CLOSE) $brackets--;
-                if ($brackets == 0) break;
-            }
-
-            if ((strlen($expr))-1 == $i) {
-                $expr= substr(substr($expr,0,-1), 1);
-            }
-       }
-
-        if (empty($expr)) {
-               throw new ExpressionException();
+        if (!empty($mixes)) {
+            array_push($array, $mixes);
         }
-        return $expr;
     }
 
     /**
-     * Decomposition of an expression into the operands
+     * Combine sub-expressions (expressions within the brackets) as separate operands
      *
-     * @param string $rule
+     * @param $operands
+     * @return array
+     * @throws BracketsException
+     */
+    public function combineOperands(array $operands):array
+    {
+        $brackets = 0;
+        $result = [];
+        $bracketsEntry = '';
+        for ($i=0; $i<sizeof($operands); $i++) {
+            if ($operands[$i] == static::BRACKET_OPEN) {
+                $brackets ++;
+                if ($brackets==1) continue;
+            }elseif($operands[$i] == static::BRACKET_CLOSE){
+                $brackets --;
+                if ($brackets == 0){
+                    if (empty($bracketsEntry)) throw new BracketsException();
+                    $this->arrayPush($result, $bracketsEntry);
+                    $bracketsEntry = '';
+                    continue;
+                }
+            }elseif(!$brackets){
+                $this->arrayPush($result, $operands[$i]);
+                continue;
+            }
+            $bracketsEntry .= $operands[$i];
+        }
+        return $result;
+    }
+
+    /**
+     * Convert string of expression to the array of operands
      * @param string $expr
      * @return array
-     * @throws Exception
      */
-    public function parseOperands (string $rule, string $expr): array
+    public function exprToOperands(string $expr):array
     {
+        $expr = str_split($expr);
         $operands = [];
-        $operators = [];
-        $operand = '';
-        $brackets = 0;
-        $bracketsEntry = '';
+        $operand = null;
 
-        // strip brackets from beginning and from end of expression
-        $expr = $this->stripBrackets($expr);
-
-        //go through literals of expression and
-        //fill a stack of operands
-        for ($i = 0; $i<= strlen($expr); $i++){
-            $literal = $expr[$i] ?? null;
-            if (
-                (!isset($literal) || preg_match($rule, $literal)) && $brackets == 0 ){
-                array_push($operands, $operand);
-                if (!empty($literal)) {
-                    array_push($operators, $literal);
-                }
-                $operand = '';
+        foreach ($expr as $literal) {
+            if ($this->isNumber($literal) || ($this->isAdd($literal) && $operand===null)) {
+                $operand .= $literal;
             }else{
-                if (isset($literal)) {
-                    if ($literal === self::BRACKET_OPEN) {
-                        $brackets++; // count open brackets to make sure that all of then would be closed
-                    } elseif ($literal == self::BRACKET_CLOSE) {
-                        if ($brackets == 0) {
-                            //close bracket at the begin
-                            throw new BracketsException();
-                        }
-                        $brackets --;
-
-                        if ($brackets == 0){
-                            if (empty($bracketsEntry)) {
-                                throw new BracketsException();
-                            }
-                            $operand .= $bracketsEntry;
-                            $bracketsEntry = '';
-                        }
-                    }
-                    if ($brackets > 0) {
-                        $bracketsEntry .= $literal;
-                    } else {
-                        $operand .= $literal;
-                    }
-                }
+                $this->arrayPush($operands, $operand);
+                $this->arrayPush($operands, $literal);
+                $operand = '';
             }
         }
+        $this->arrayPush($operands, $operand);
 
-        if ($brackets) {
-            throw new BracketsException();
+        //combine sub-expression (expression within the brackets) as a separate operand
+        return $this->combineOperands($operands);
+    }
+
+    /**
+     * Group the factors within the array of operands
+     * @param $operands
+     * @return array
+     */
+    public function explodeFactors ($operands)
+    {
+        $factor = [];
+        $result = [];
+        foreach ($operands as $operand) {
+            if (!$this->isAdd($operand)) {
+                $this->arrayPush($factor, $operand);
+            }else{
+                $this->arrayPush($result, sizeof($factor) > 1 ? $factor : $factor[0]);
+                $this->arrayPush($result,$operand);
+                $factor = [];
+            }
         }
-
-        return [
-            'operands' => $operands,
-            'operators' => $operators
-        ];
+        $this->arrayPush($result, sizeof($factor) > 1 ? $factor : $factor[0]);
+        return $result;
     }
 
     /**
      * Evalute single operation
      *
      * @param $operand1
-     * @param $operand2
      * @param string $operator
+     * @param $operand2
      * @return float
      */
-    public function evalute($operand1, $operand2, string $operator):float
+    public function evalute($operand1, string $operator, $operand2):float
     {
         try {
             switch ($operator) {
@@ -179,57 +184,44 @@ class Parser
     }
 
     /**
-     * Evalute by pairs from operands list
-     *
-     * @param $list
-     * @return float|int
-     */
-    public function evaluteOperands($list)
-    {
-        $result = 0;
-        if ($list) {
-            $result = $list['operands'][0];
-            for ($i = 1; $i < sizeof($list['operands']); $i++) {
-                if (!empty($list['operators'][$i - 1])) {
-                    $result = $this->evalute($result, $list['operands'][$i], $list['operators'][$i - 1]);
-                }
-            }
-        }
-        return $result;
-    }
-
-
-    /**
      * Parse an expression
      *
      * @param $expr
      * @return float
      */
-    private function processExpr($expr):float
+    private function processExpr(string $expr):float
     {
-        $terms = $this->parseOperands(self::TERMS_RULE, $expr);
-        return $this->processTerms($terms);
+        $operands = $this->exprToOperands($expr, static::ADD_RULE);
+        return $this->processTerms($operands);
     }
 
     /**
      * Parse Terms and decomposit it into the factors
      * @param $terms
      */
-    private function processTerms($terms):float
+    private function processTerms(array $operands):float
     {
-        if (!empty($terms['operands'])) {
-            foreach ($terms['operands'] as $key=>$term) {
-                if (preg_match(static::TERMS_RULE, $term)
-                    && sizeof($this->parseOperands(static::TERMS_RULE, $term)['operands']) > 1) {
-                    $terms['operands'][$key] = $this->processExpr($term);
-                }else {
-                    $factors = $this->parseOperands(static::FACTORS_RULE, $term);
-                    $terms['operands'][$key] = $this->processFactors($factors);
+        $result = null;
+        $add = null;
+        if ($operands) {
+            $operands = $this->explodeFactors($operands);
+            foreach ($operands as $operand) {
+                if (is_array($operand) || !$this->isAdd($operand)) {
+                    $term = $this->processFactors($operand);
+                    if ($result === null) {
+                        $result = $term ;
+                    }else{
+                        if (!empty($add)) {
+                            $result = $this->evalute($result, $add, $term);
+                        }
+                    }
+                } elseif($this->isAdd($operand)) {
+                    $add = $operand;
                 }
             }
         }
 
-        return $this->evaluteOperands($terms);
+        return $result;
     }
 
     /**
@@ -237,17 +229,28 @@ class Parser
      * @param $factors
      * @return float
      */
-    public function processFactors($factors):float {
-        if (!empty($factors['operands'])) {
-            foreach ($factors['operands'] as $key=>$factor) {
-                $factors['operands'][$key] = $this->processNeg($factor);
+    private function processFactors($term):float {
+        if (is_array($term)) {
+            $result = null;
+            $mult = null;
+            foreach ($term as $operand) {
+                if (!$this->isMult($operand)) {
+                    $factor = $this->processNeg($operand);
+                    if ($result === null) {
+                        $result = $factor ;
+                    }else{
+                        if (!empty($mult)) {
+                            $result = $this->evalute($result, $mult, $factor);
+                        }
+                    }
+                } elseif($this->isMult($operand)) {
+                    $mult = $operand;
+                }
             }
+            return $result;
+        } else {
+            return $this->processNeg($term);
         }
-        if (empty($factors['operators'][0])) {
-            return $factors['operands'][0];
-        }
-
-        return $this->evaluteOperands($factors);
     }
 
     /**
@@ -268,13 +271,12 @@ class Parser
      * Process an expression
      * @return float
      */
-    public function process($expr):float
+    public function process(string $expr):float
     {
         if ($this->validate($expr)) {
             return $this->processExpr(trim($expr));
         } else {
-
+            throw new Exception(EXCEPTION_INVALID_EXPRESSION);
         }
-        return null;
     }
 }
