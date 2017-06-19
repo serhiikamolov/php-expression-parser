@@ -19,3 +19,11 @@ http://localhost:8181/parser.php?expr=200+12*((1/8)+1)-19
 ### Requirements
 
 php 7.0 and higher
+
+
+### How to run tests
+
+$ composer install
+
+$ ./vendor/bin/phpunit tests
+
