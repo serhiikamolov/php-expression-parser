@@ -11,7 +11,7 @@ $ php parser.php "200+12*((1/8)+1)-19"
 
 ### Run under built-in web server
 
-**Startting the web server**
+**Starting the web server**
 
 $ php -S localhost:8181
 
