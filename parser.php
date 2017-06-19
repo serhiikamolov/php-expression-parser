@@ -2,8 +2,7 @@
 
 define('INPUT_NAME', 'expr');
 
-
-require 'classes/Parser.php';
+require 'vendor/autoload.php';
 
 if (!$_GET) {
     $expression = $argv[1] ?? null;
