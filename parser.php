@@ -1,4 +1,8 @@
 <?php
+
+define('INPUT_NAME', 'expr');
+
+
 require 'classes/Parser.php';
 
 if (!$_GET) {

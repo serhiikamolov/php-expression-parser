@@ -6,7 +6,8 @@
     },
     "autoload": {
         "psr-4": {
-            "classes\\": "classes"
+            "classes\\": "classes",
+            "tests\\": "tests"
         }
     },
     "license": "MIT"

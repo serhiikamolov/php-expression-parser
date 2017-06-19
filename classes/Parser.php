@@ -1,21 +1,7 @@
 <?php
 namespace classes;
 
-use PHPUnit\Framework\Exception;
-
-define('INPUT_NAME', 'expr');
-define('EXCEPTION_INVALID_EXPRESSION', 'Invalid expression');
-define('EXCEPTION_INVALID_BRACKETS', 'Invalid number of brackets');
-
-class ExpressionException extends \Exception
-{
-    protected $message = EXCEPTION_INVALID_EXPRESSION;
-}
-
-class BracketsException extends \Exception
-{
-    protected $message = EXCEPTION_INVALID_BRACKETS;
-}
+use Exception;
 
 class Parser
 {
@@ -57,8 +43,11 @@ class Parser
      */
     public function validate($expr):bool
     {
+        if (preg_match('/[+-]?\d+(\.\d+)/', $expr)) {
+            throw new Exception('the float numbers is illegal');
+        }
         return (
-            preg_match('/^[0-9\.\+\-*\/\(\)]+$/', $expr) &&
+            preg_match('/^[0-9\+\-*\/\(\)]+$/', $expr) &&
             preg_match('/^((?!\)\().)*$/', $expr)
         ) ? true : false;
     }
@@ -66,7 +55,7 @@ class Parser
 
     private function arrayPush (&$array, $mixes)
     {
-        if (!empty($mixes)) {
+        if (!empty($mixes) || $mixes === '0') {
             array_push($array, $mixes);
         }
     }
@@ -76,7 +65,7 @@ class Parser
      *
      * @param $operands
      * @return array
-     * @throws BracketsException
+     * @throws Exception
      */
     public function combineOperands(array $operands):array
     {
@@ -90,7 +79,7 @@ class Parser
             }elseif($operands[$i] == static::BRACKET_CLOSE){
                 $brackets --;
                 if ($brackets == 0){
-                    if (empty($bracketsEntry)) throw new BracketsException();
+                    if (empty($bracketsEntry)) throw new Exception('Malformed expression');
                     $this->arrayPush($result, $bracketsEntry);
                     $bracketsEntry = '';
                     continue;
@@ -101,9 +90,55 @@ class Parser
             }
             $bracketsEntry .= $operands[$i];
         }
-        return $result;
+
+        if ($brackets) throw new Exception('Malformed expression');
+        return $this->validateOperands($result);
     }
 
+    /**
+     * Validate operands
+     * @param $operands
+     * @return mixed
+     * @throws Exception
+     */
+    public function validateOperands($operands)
+    {
+        $operandsNum = 0;
+        $operatorsNum = 0;
+        if ($operands) {
+            foreach ($operands as $operand) {
+                if ($this->isAdd($operand) || $this->isMult($operand)) {
+                    $operatorsNum++;
+                }else{
+                    $operandsNum++;
+                }
+            }
+        }
+        if ($operatorsNum>$operandsNum) {
+            throw new Exception('Malformed expression');
+        }
+        return $operands;
+    }
+    /**
+     * Do some normalization
+     * @param array $operands
+     * @return array
+     */
+    public function normalizeOperands(array $operands):array
+    {
+        //combine sub-expression (expression within the brackets) as a separate operand
+        $operands = $this->combineOperands($operands);
+
+        $this->validateOperands($operands);
+
+        if ($operands[0] == static::OPERATOR_MINUS) {
+            $additionalOne = $operands[0]."1";
+            array_shift($operands);
+            array_unshift($operands, $additionalOne, static::OPERATOR_MULT);
+        }
+
+        return $operands;
+    }
     /**
      * Convert string of expression to the array of operands
      * @param string $expr
@@ -116,7 +151,7 @@ class Parser
         $operand = null;
 
         foreach ($expr as $literal) {
-            if ($this->isNumber($literal) || ($this->isAdd($literal) && $operand===null)) {
+            if ($this->isNumber($literal) || ($literal===static::OPERATOR_MINUS && $operand===null)) {
                 $operand .= $literal;
             }else{
                 $this->arrayPush($operands, $operand);
@@ -126,16 +161,15 @@ class Parser
         }
         $this->arrayPush($operands, $operand);
 
-        //combine sub-expression (expression within the brackets) as a separate operand
-        return $this->combineOperands($operands);
+        return $this->normalizeOperands($operands);
     }
 
     /**
-     * Group the factors within the array of operands
+     * Group the terms within the array of operands
      * @param $operands
      * @return array
      */
-    public function explodeFactors ($operands)
+    public function explodeTerms ($operands)
     {
         $factor = [];
         $result = [];
@@ -143,6 +177,7 @@ class Parser
             if (!$this->isAdd($operand)) {
                 $this->arrayPush($factor, $operand);
             }else{
+                if (empty($factor)) throw new Exception('Malformed expression');
                 $this->arrayPush($result, sizeof($factor) > 1 ? $factor : $factor[0]);
                 $this->arrayPush($result,$operand);
                 $factor = [];
@@ -162,23 +197,20 @@ class Parser
      */
     public function evalute($operand1, string $operator, $operand2):float
     {
-        try {
-            switch ($operator) {
-                case(static::OPERATOR_PLUS):
-                    return $operand1 + $operand2;
-                    break;
-                case(static::OPERATOR_MINUS):
-                    return $operand1 - $operand2;
-                    break;
-                case(static::OPERATOR_MULT):
-                    return $operand1 * $operand2;
-                    break;
-                case(static::OPERATOR_DIV):
-                    return $operand1 / $operand2;
-                    break;
-            }
-        }catch(\Exception $e){
-            throw new Exception('Evaluting error: '.$e->getMessage());
+        switch ($operator) {
+            case(static::OPERATOR_PLUS):
+                return $operand1 + $operand2;
+                break;
+            case(static::OPERATOR_MINUS):
+                return $operand1 - $operand2;
+                break;
+            case(static::OPERATOR_MULT):
+                return $operand1 * $operand2;
+                break;
+            case(static::OPERATOR_DIV):
+                if ($operand2 == 0) throw new Exception('Division by zero');
+                return $operand1 / $operand2;
+                break;
         }
         return null;
     }
@@ -204,7 +236,7 @@ class Parser
         $result = null;
         $add = null;
         if ($operands) {
-            $operands = $this->explodeFactors($operands);
+            $operands = $this->explodeTerms($operands);
             foreach ($operands as $operand) {
                 if (is_array($operand) || !$this->isAdd($operand)) {
                     $term = $this->processFactors($operand);
@@ -220,7 +252,6 @@ class Parser
                 }
             }
         }
-
         return $result;
     }
 
@@ -241,11 +272,16 @@ class Parser
                     }else{
                         if (!empty($mult)) {
                             $result = $this->evalute($result, $mult, $factor);
+                            $mult = '';
                         }
                     }
                 } elseif($this->isMult($operand)) {
+                    if (!empty($mult)) throw new Exception('Malformed expression'); //when two operators go one by one
                     $mult = $operand;
                 }
+            }
+            if (sizeof($term)>1 && $mult===null) {
+                throw new Exception('Malformed expression');//when there's no any operators between operands
             }
             return $result;
         } else {
@@ -258,7 +294,7 @@ class Parser
      * @param $neg
      * @return float
      */
-    public function processNeg($neg):float
+    private function processNeg($neg):float
     {
         if ($this->isNumber($neg)) {
             return (float)$neg;
@@ -276,7 +312,7 @@ class Parser
         if ($this->validate($expr)) {
             return $this->processExpr(trim($expr));
         } else {
-            throw new Exception(EXCEPTION_INVALID_EXPRESSION);
+            throw new Exception('Invalid expression');
         }
     }
 }
