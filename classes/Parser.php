@@ -27,7 +27,7 @@ class Parser extends OperandsParser
      * @param $operands
      * @return array
      */
-    public function explodeTerms ($operands)
+    public function explodeTerms (array $operands):array
     {
         $factor = [];
         $result = [];

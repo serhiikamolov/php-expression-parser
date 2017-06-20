@@ -46,7 +46,7 @@ abstract class OperandsParser extends BaseParser
      * @return mixed
      * @throws Exception
      */
-    public function validateOperands($operands)
+    private function validateOperands($operands)
     {
         $operandsNum = 0;
         $operatorsNum = 0;

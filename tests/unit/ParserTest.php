@@ -51,4 +51,11 @@ class ParserTest extends TestCase
         $parser->evalute(1, $parser::OPERATOR_DIV, 0);
     }
 
+    public function testExplodeTerms()
+    {
+        $parser = new Parser();
+        $terms = $parser->explodeTerms(['2+6','*','3','+','8']);
+        $this->assertEquals($terms, [['2+6','*','3'],'+','8']);
+    }
+
 }
